@@ -20,7 +20,7 @@ OUT = ROOT / "assets" / "profile.svg"
 BG, EDGE, BAR = "#0d0d0d", "#262626", "#151515"
 TEXT, DIM, FAINT = "#f0f0f0", "#9a9a9a", "#4f4f4f"
 
-W, H = 760, 400
+W, H = 760, 510
 MONO = "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace"
 
 # --- braille portrait -------------------------------------------------------
@@ -54,11 +54,28 @@ INFO_W = max(len(t) for t, _ in INFO) * INFO_PITCH
 PAL = ["#f0f0f0", "#c4c4c4", "#9a9a9a", "#7a7a7a", "#595959", "#3d3d3d", "#262626", "#0d0d0d"]
 PAL_X, PAL_Y, PAL_W, PAL_H, PAL_GAP = 600, 82, 108, 12, 10
 
+# --- contribution heatmap ---------------------------------------------------
+HEAT_X, HEAT_Y = 26, 356
+CELL, COL_PITCH, ROW_PITCH = 10, 13.4, 11.6
+LEVELS = ["#1c1c1c", "#333333", "#525252", "#7d7d7d", "#b4b4b4", "#f0f0f0"]
+GRID = STATS.get("contributions") or []
+TOP = max((c for week in GRID for c in week), default=0)
+
+
+def level(count):
+    """grayscale ramp, scaled to the busiest day of the year"""
+    if count <= 0 or TOP <= 0:
+        return LEVELS[0]
+    for i, cut in enumerate((0.25, 0.5, 0.75)):
+        if count < TOP * cut:
+            return LEVELS[i + 1]
+    return LEVELS[4]
+
 # --- typing prompt ----------------------------------------------------------
 PROMPT = "angelica@github:~$ "
 PROMPT_W = len(PROMPT) * INFO_PITCH
 TYPE_X = 26 + PROMPT_W
-TYPE_Y = 356
+TYPE_Y = 486
 TYPE_FS, TYPE_PITCH = 11.5, 6.9
 LOOP = 15.0
 TYPED = [
@@ -146,6 +163,7 @@ pairs = [
     ("repos", stats.get("repos", 0)),
     ("stars", stats.get("stars", 0)),
     ("followers", stats.get("followers", 0)),
+    ("following", stats.get("following", 0)),
     ("last push", stats.get("last_push", "—")),
 ]
 stat_runs, cx = [], 26.0
@@ -160,10 +178,22 @@ palette = [
     f'width="{PAL_W}" height="{PAL_H}" fill="{c}"/>'
     for i, c in enumerate(PAL)]
 
+cells = [
+    f'    <rect x="{HEAT_X + col * COL_PITCH:.1f}" y="{HEAT_Y + row * ROW_PITCH:.1f}" '
+    f'width="{CELL}" height="{CELL}" rx="2" fill="{level(count)}"/>'
+    for col, week in enumerate(GRID)
+    for row, count in enumerate(week[:7])]
+HEAT_W = (len(GRID) - 1) * COL_PITCH + CELL if GRID else 0
+
+summary = f'{stats.get("contrib_total", 0):,} contributions · {stats.get("streak", 0)} day streak'
+langs = " · ".join(f"{n.lower()} {c}" for n, c in (stats.get("langs") or [])[:4]) or "waiting for first refresh"
+recent = " · ".join(stats.get("recent") or []) or "—"
+
 svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" role="img" aria-labelledby="t d">
   <title id="t">angelica@github</title>
   <desc id="d">Monochrome terminal window: a braille dot portrait, a neofetch style
-  system readout, live GitHub counts and a typing prompt.</desc>
+  system readout, live GitHub counts, a year of contribution activity and a typing
+  prompt.</desc>
   <style>
     text {{ font-family: {MONO}; font-size: {INFO_FS}px; white-space: pre; }}
     .chrome {{ font-size: 10px; letter-spacing: 0.08em; }}
@@ -200,6 +230,18 @@ svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewB
     {chr(10).join(stat_runs)}
   </g>
   <text x="{W - 26}" y="316" fill="{FAINT}" font-size="10" text-anchor="end" xml:space="preserve">updated {escape(str(stats.get("updated", "—")))}</text>
+
+  <text x="{HEAT_X}" y="342" fill="{FAINT}" font-size="9" letter-spacing="0.14em">contributions · last 12 months</text>
+  <text x="{HEAT_X + HEAT_W:.1f}" y="342" fill="{DIM}" font-size="9.5" text-anchor="end">{escape(summary)}</text>
+  <g>
+{chr(10).join(cells)}
+  </g>
+
+  <g font-size="9.5" letter-spacing="0.02em">
+    <text x="26" y="452" fill="{DIM}" xml:space="preserve">langs   {escape(langs)}</text>
+    <text x="{W - 26}" y="452" fill="{DIM}" text-anchor="end" xml:space="preserve">recent  {escape(recent)}</text>
+  </g>
+  <path d="M26 466 H{W - 26}" stroke="{EDGE}" stroke-width="1"/>
 
   <g font-size="{TYPE_FS}">
 {chr(10).join(typed)}
